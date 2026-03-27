@@ -2,6 +2,7 @@ use super::json_error::JsonError;
 use crate::{app::AppState, fpga::IpCore};
 use anyhow::Result;
 use axum::{Json, extract::State, response::Html};
+use maia_json::Versions;
 use std::sync::Mutex;
 
 async fn fw_version() -> Result<String> {
@@ -75,8 +76,14 @@ pub async fn get_version(State(state): State<AppState>) -> Result<Html<String>, 
 pub async fn get_versions(
     State(state): State<AppState>,
 ) -> Result<Json<maia_json::Versions>, JsonError> {
-    versions(state.ip_core())
-        .await
-        .map_err(JsonError::server_error)
-        .map(Json)
+    // versions(state.ip_core())
+    //     .await
+    //     .map_err(JsonError::server_error)
+    //     .map(Json)
+    Ok(axum::Json(Versions {
+        firmware_version: "stub".to_string(),
+        maia_httpd_git: "stub".to_string(),
+        maia_httpd_version: "stub".to_string(),
+        maia_hdl_version: "stub".to_string(),
+    }))
 }

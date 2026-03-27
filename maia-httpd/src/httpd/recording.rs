@@ -495,7 +495,7 @@ struct RecordingBuffer {
 
 unsafe impl Send for RecordingBuffer {}
 unsafe impl Sync for RecordingBuffer {}
-
+#[cfg(not(feature = "stub"))]
 impl RecordingBuffer {
     async fn new() -> Result<RecordingBuffer> {
         let size = usize::from_str_radix(
@@ -530,7 +530,24 @@ impl RecordingBuffer {
         .await?
     }
 }
+#[cfg(feature = "stub")]
+impl RecordingBuffer {
+    async fn new() -> Result<RecordingBuffer> {
+        tracing::warn!("Using stub RecordingBuffer");
 
+        let size = 8 * 1024 * 1024;
+
+        let mut data = Vec::<u8>::with_capacity(size);
+        data.resize(size, 0);
+
+        let boxed = data.into_boxed_slice();
+        let base = boxed.as_ptr();
+
+        std::mem::forget(boxed);
+
+        Ok(RecordingBuffer { base, size })
+    }
+}
 impl Drop for RecordingBuffer {
     fn drop(&mut self) {
         unsafe {

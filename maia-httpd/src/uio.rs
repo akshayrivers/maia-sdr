@@ -27,7 +27,6 @@ pub struct Mapping {
     effective: *mut libc::c_void,
     map_size: usize,
 }
-
 impl Uio {
     /// Opens an UIO using its number.
     ///
@@ -150,6 +149,7 @@ impl Uio {
     ///
     /// This function enables the interrupts for an UIO device by writing a `1`
     /// to the corresponding character device.
+    #[cfg(not(feature = "stub"))]
     pub async fn irq_enable(&mut self) -> Result<()> {
         let bytes = 1u32.to_ne_bytes();
         self.file.write_all(&bytes).await?;
@@ -160,6 +160,7 @@ impl Uio {
     ///
     /// This function disables the interrupts for an UIO device by writing a `0`
     /// to the corresponding character device.
+    #[cfg(not(feature = "stub"))]
     pub async fn irq_disable(&mut self) -> Result<()> {
         let bytes = 0u32.to_ne_bytes();
         self.file.write_all(&bytes).await?;
@@ -170,6 +171,7 @@ impl Uio {
     ///
     /// This function waits for an interrupt from a UIO device by reading from
     /// the corresponding character device.
+    #[cfg(not(feature = "stub"))]
     pub async fn irq_wait(&mut self) -> Result<u32> {
         let mut bytes = [0; 4];
         self.file.read_exact(&mut bytes).await?;
@@ -194,5 +196,34 @@ impl Drop for Mapping {
             // TODO: control failure
             libc::munmap(self.base, self.map_size);
         }
+    }
+}
+#[cfg(feature = "stub")]
+impl Uio {
+    pub fn stub() -> Self {
+        tracing::warn!("Using stub Uio");
+
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/null")
+            .expect("Failed to open /dev/null for stub");
+
+        let file = fs::File::from_std(file);
+
+        Self { num: 0, file }
+    }
+
+    pub async fn irq_enable(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn irq_disable(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn irq_wait(&mut self) -> Result<u32> {
+        futures::future::pending::<()>().await;
+        Ok(0)
     }
 }

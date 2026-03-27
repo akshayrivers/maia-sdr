@@ -124,3 +124,10 @@ impl Drop for RxBuffer {
         }
     }
 }
+
+#[cfg(feature = "stub")]
+impl RxBuffer {
+    pub fn stub() -> Self {
+        panic!("RxBuffer::stub() called — hardware disabled in stub mode")
+    }
+}

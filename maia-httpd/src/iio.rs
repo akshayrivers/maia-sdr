@@ -49,6 +49,7 @@ impl Ad9361 {
     ///
     /// This function opens the first IIO device with name ad9361-phy that is
     /// found in the system.
+    #[cfg(not(feature = "stub"))]
     pub async fn new() -> Result<Ad9361> {
         let iio_device_path = Self::find_iio_device()
             .await?
@@ -75,19 +76,26 @@ impl Ad9361 {
         }
         Ok(None)
     }
-
+    #[cfg(not(feature = "stub"))]
     iio_getset!(
         sampling_frequency,
         "in_voltage_sampling_frequency",
         u32,
         u32
     );
+    #[cfg(not(feature = "stub"))]
     iio_getset!(rx_rf_bandwidth, "in_voltage_rf_bandwidth", u32, u32);
+    #[cfg(not(feature = "stub"))]
     iio_getset!(tx_rf_bandwidth, "out_voltage_rf_bandwidth", u32, u32);
+    #[cfg(not(feature = "stub"))]
     iio_getset!(rx_lo_frequency, "out_altvoltage0_RX_LO_frequency", u64, u64);
+    #[cfg(not(feature = "stub"))]
     iio_getset!(tx_lo_frequency, "out_altvoltage1_TX_LO_frequency", u64, u64);
+    #[cfg(not(feature = "stub"))]
     iio_getset!(rx_gain, "in_voltage0_hardwaregain", Dbf64, f64);
+    #[cfg(not(feature = "stub"))]
     iio_getset!(tx_gain, "out_voltage0_hardwaregain", Dbf64, f64);
+    #[cfg(not(feature = "stub"))]
     iio_getset!(
         rx_gain_mode,
         "in_voltage0_gain_control_mode",
@@ -95,7 +103,79 @@ impl Ad9361 {
         Ad9361GainMode
     );
 }
+#[cfg(feature = "stub")]
+impl Ad9361 {
+    pub async fn new() -> Result<Self> {
+        tracing::warn!("Using stub AD9361");
+        Ok(Ad9361 {
+            iio_device_path: PathBuf::new(),
+        })
+    }
 
+    pub async fn get_sampling_frequency(&self) -> Result<u32> {
+        Ok(30_720_000)
+    }
+
+    pub async fn set_sampling_frequency(&self, _freq: u32) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_rx_rf_bandwidth(&self) -> Result<u32> {
+        Ok(20_000_000)
+    }
+
+    pub async fn set_rx_rf_bandwidth(&self, _v: u32) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_tx_rf_bandwidth(&self) -> Result<u32> {
+        Ok(20_000_000)
+    }
+
+    pub async fn set_tx_rf_bandwidth(&self, _v: u32) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_rx_lo_frequency(&self) -> Result<u64> {
+        Ok(2_400_000_000)
+    }
+
+    pub async fn set_rx_lo_frequency(&self, _v: u64) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_tx_lo_frequency(&self) -> Result<u64> {
+        Ok(2_400_000_000)
+    }
+
+    pub async fn set_tx_lo_frequency(&self, _v: u64) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_rx_gain(&self) -> Result<f64> {
+        Ok(10.0)
+    }
+
+    pub async fn set_rx_gain(&self, _v: f64) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_tx_gain(&self) -> Result<f64> {
+        Ok(0.0)
+    }
+
+    pub async fn set_tx_gain(&self, _v: f64) -> Result<()> {
+        Ok(())
+    }
+
+    pub async fn get_rx_gain_mode(&self) -> Result<Ad9361GainMode> {
+        Ok(Ad9361GainMode(maia_json::Ad9361GainMode::Manual))
+    }
+
+    pub async fn set_rx_gain_mode(&self, _v: Ad9361GainMode) -> Result<()> {
+        Ok(())
+    }
+}
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 /// AD9361 gain control modes.
 ///

@@ -72,7 +72,7 @@ pub struct InterruptHandler {
 
 #[derive(Debug)]
 struct Dma {
-    buffer: RxBuffer,
+    buffer: Option<RxBuffer>,
     last_written: Option<usize>,
     num_buffers_mask: usize,
 }
@@ -228,6 +228,7 @@ impl IpCore {
     ///
     /// On success, the `IpCore` and the corresponding [`InterruptHandler`] are
     /// returned.
+    #[cfg(not(feature = "stub"))]
     pub async fn take() -> Result<(IpCore, InterruptHandler)> {
         let uio = Uio::from_name("maia-sdr")
             .await
@@ -285,7 +286,7 @@ impl IpCore {
         let interrupt_handler = InterruptHandler::new(uio, interrupt_registers);
         Ok((ip_core, interrupt_handler))
     }
-
+    #[cfg(not(feature = "stub"))]
     fn version_struct(&self) -> Version {
         let version = self.registers.version().read();
         Version {
@@ -294,12 +295,12 @@ impl IpCore {
             bugfix: version.bugfix().bits(),
         }
     }
-
+    #[cfg(not(feature = "stub"))]
     /// Gives the version of the IP core as a `String`.
     pub fn version(&self) -> String {
         format!("{}", self.version_struct())
     }
-
+    #[cfg(not(feature = "stub"))]
     fn check_product_id(&self) -> Result<()> {
         const PRODUCT_ID: &[u8; 4] = b"maia";
         let product_id = unsafe {
@@ -310,13 +311,13 @@ impl IpCore {
         }
         Ok(())
     }
-
+    #[cfg(not(feature = "stub"))]
     fn set_sdr_reset(&self, value: bool) {
         self.registers
             .control()
             .modify(|_, w| w.sdr_reset().bit(value));
     }
-
+    #[cfg(not(feature = "stub"))]
     async fn log_open(&self) -> Result<()> {
         tracing::info!(
             "opened Maia SDR IP core version {} at physical address {:#08x}",
@@ -330,6 +331,7 @@ impl IpCore {
     ///
     /// This register indicates the index of the last buffer to which the
     /// spectrometer has written.
+    #[cfg(not(feature = "stub"))]
     pub fn spectrometer_last_buffer(&self) -> usize {
         self.registers
             .spectrometer()
@@ -400,6 +402,22 @@ impl IpCore {
     /// function can fail if the DDC output is selected but the current DDC
     /// configuration cannot run with the current input sample rate, as given in
     /// the `input_samp_rate` argument.
+    #[cfg(feature = "stub")]
+    pub fn set_spectrometer_input(
+        &mut self,
+        input: maia_json::SpectrometerInput,
+        _input_samp_freq: f64,
+    ) -> Result<()> {
+        self.spectrometer_input = input;
+        Ok(())
+    }
+
+    #[cfg(feature = "stub")]
+    pub fn set_spectrometer_number_integrations(&mut self, value: u32) -> Result<()> {
+        self.spectrometer_integrations = value;
+        Ok(())
+    }
+    #[cfg(not(feature = "stub"))]
     pub fn set_spectrometer_input(
         &mut self,
         input: maia_json::SpectrometerInput,
@@ -429,6 +447,7 @@ impl IpCore {
     /// Sets the value of the number of integrations register of the spectrometer.
     ///
     /// See [`IpCore::spectrometer_number_integrations`].
+    #[cfg(not(feature = "stub"))]
     pub fn set_spectrometer_number_integrations(&mut self, value: u32) -> Result<()> {
         const WIDTH: u8 = maia_pac::maia_sdr::spectrometer::NumIntegrationsW::<
             maia_pac::maia_sdr::spectrometer::SpectrometerSpec,
@@ -451,6 +470,12 @@ impl IpCore {
     /// Sets the spectrometer mode.
     ///
     /// See [`IpCore::spectrometer_mode`].
+    ///
+    #[cfg(feature = "stub")]
+    pub fn set_spectrometer_mode(&mut self, mode: maia_json::SpectrometerMode) {
+        self.spectrometer_mode = mode; // just update cache, no register write
+    }
+    #[cfg(not(feature = "stub"))]
     pub fn set_spectrometer_mode(&mut self, mode: maia_json::SpectrometerMode) {
         let peak_detect = match mode {
             maia_json::SpectrometerMode::Average => false,
@@ -477,7 +502,9 @@ impl IpCore {
                 )
             })
     }
-
+    #[cfg(feature = "stub")]
+    fn set_ddc_enable(&mut self, enable: bool) {}
+    #[cfg(not(feature = "stub"))]
     fn set_ddc_enable(&mut self, enable: bool) {
         self.registers
             .ddc_control()
@@ -490,6 +517,23 @@ impl IpCore {
     /// The `input_sampling_frequency` parameter indicates the sampling
     /// frequency of the source connected to the DDC input (typically the
     /// AD9361).
+    ///
+    #[cfg(feature = "stub")]
+    pub fn ddc_config(&self, input_sampling_frequency: f64) -> maia_json::DDCConfig {
+        let summary = self.ddc_config_summary(input_sampling_frequency);
+        maia_json::DDCConfig {
+            enabled: summary.enabled,
+            frequency: summary.frequency,
+            decimation: summary.decimation,
+            input_sampling_frequency: summary.input_sampling_frequency,
+            output_sampling_frequency: summary.output_sampling_frequency,
+            max_input_sampling_frequency: summary.max_input_sampling_frequency,
+            fir1: self.ddc_config.fir1.clone(),
+            fir2: self.ddc_config.fir2.clone(),
+            fir3: self.ddc_config.fir3.clone(),
+        }
+    }
+    #[cfg(not(feature = "stub"))]
     pub fn ddc_config(&self, input_sampling_frequency: f64) -> maia_json::DDCConfig {
         let summary = self.ddc_config_summary(input_sampling_frequency);
         maia_json::DDCConfig {
@@ -578,6 +622,16 @@ impl IpCore {
         }
     }
 
+    #[cfg(feature = "stub")]
+    fn try_set_ddc_config(
+        &self,
+        _config: &maia_json::PutDDCConfig,
+        _input_samp_rate: f64,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    #[cfg(not(feature = "stub"))]
     fn try_set_ddc_config(
         &self,
         config: &maia_json::PutDDCConfig,
@@ -629,13 +683,24 @@ impl IpCore {
     /// Sets the mixer frequency of the DDC.
     ///
     /// The `frequency` is given in units of Hz.
+    #[cfg(feature = "stub")]
+    pub fn set_ddc_frequency(&mut self, frequency: f64, _input_samp_rate: f64) -> Result<()> {
+        self.ddc_config.frequency = frequency;
+        Ok(())
+    }
+
+    #[cfg(feature = "stub")]
+    fn try_set_ddc_frequency(&self, _frequency: f64, _input_samp_rate: f64) -> Result<()> {
+        Ok(())
+    }
+    #[cfg(not(feature = "stub"))]
     pub fn set_ddc_frequency(&mut self, frequency: f64, input_samp_rate: f64) -> Result<()> {
         self.try_set_ddc_frequency(frequency, input_samp_rate)?;
         // update configuration cache if we succeeded
         self.ddc_config.frequency = frequency;
         Ok(())
     }
-
+    #[cfg(not(feature = "stub"))]
     fn try_set_ddc_frequency(&self, frequency: f64, input_samp_rate: f64) -> Result<()> {
         if !(-0.5 * input_samp_rate..=0.5 * input_samp_rate).contains(&frequency) {
             anyhow::bail!(
@@ -653,7 +718,7 @@ impl IpCore {
             .modify(|_, w| unsafe { w.frequency().bits(nco_freq as u32) });
         Ok(())
     }
-
+    #[cfg(not(feature = "stub"))]
     impl_set_ddc_fir!(
         set_ddc_fir1,
         0,
@@ -664,6 +729,7 @@ impl IpCore {
     );
     // we need an odd_operations field for fir2, even though it doesn't have its
     // own and it isn't touched
+    #[cfg(not(feature = "stub"))]
     impl_set_ddc_fir!(
         set_ddc_fir2,
         256,
@@ -672,6 +738,7 @@ impl IpCore {
         operations_minus_one2,
         odd_operations1
     );
+    #[cfg(not(feature = "stub"))]
     impl_set_ddc_fir!(
         set_ddc_fir3,
         512,
@@ -718,6 +785,13 @@ impl IpCore {
     /// Gives the value of the recorder mode register of the recorder.
     ///
     /// This register is used to select 8-bit mode or 12-bit mode.
+    #[cfg(feature = "stub")]
+    pub fn recorder_mode(&self) -> anyhow::Result<maia_json::RecorderMode> {
+        tracing::warn!("recorder_mode stubbed");
+        Ok(maia_json::RecorderMode::IQ16bit)
+    }
+
+    #[cfg(not(feature = "stub"))]
     pub fn recorder_mode(&self) -> Result<maia_json::RecorderMode> {
         Ok(
             match self.registers.recorder_control().read().mode().bits() {
@@ -732,6 +806,11 @@ impl IpCore {
     /// Sets the value of the recorder mode register of the recorder.
     ///
     /// See [`IpCore::recorder_mode`].
+
+    #[cfg(feature = "stub")]
+    pub fn set_recorder_mode(&self, _mode: maia_json::RecorderMode) {}
+
+    #[cfg(not(feature = "stub"))]
     pub fn set_recorder_mode(&self, mode: maia_json::RecorderMode) {
         let mode = match mode {
             maia_json::RecorderMode::IQ16bit => 0,
@@ -747,6 +826,13 @@ impl IpCore {
     ///
     /// The recording will end when the recording DMA buffer is exhausted or
     /// when [`IpCore::recorder_stop`] is called.
+    ///
+    #[cfg(feature = "stub")]
+    pub fn recorder_start(&self) {
+        tracing::warn!("recorder_start stubbed");
+    }
+
+    #[cfg(not(feature = "stub"))]
     pub fn recorder_start(&self) {
         tracing::info!("starting recorder");
         self.registers
@@ -757,6 +843,12 @@ impl IpCore {
     /// Stops a recording.
     ///
     /// This stops a currently running recording.
+    #[cfg(feature = "stub")]
+    pub fn recorder_stop(&self) {
+        tracing::warn!("recorder_stop stubbed");
+    }
+
+    #[cfg(not(feature = "stub"))]
     pub fn recorder_stop(&self) {
         tracing::info!("stopping recorder");
         self.registers
@@ -769,6 +861,12 @@ impl IpCore {
     /// This register indicates the next physical address to which the recorder
     /// would have written if it had not stopped. It can be used to calculate
     /// the size of the recording.
+    #[cfg(feature = "stub")]
+    pub fn recorder_next_address(&self) -> usize {
+        0
+    }
+
+    #[cfg(not(feature = "stub"))]
     pub fn recorder_next_address(&self) -> usize {
         usize::try_from(self.registers.recorder_next_address().read().bits()).unwrap()
     }
@@ -819,6 +917,7 @@ impl InterruptHandler {
     /// The function must be run concurrently with the rest of the application
     /// so that interrupts can be received and notifications can be sent to the
     /// waiters.
+    #[cfg(not(feature = "stub"))]
     pub async fn run(mut self) -> Result<()> {
         loop {
             self.wait_and_notify().await?;
@@ -827,7 +926,25 @@ impl InterruptHandler {
 
     impl_interrupt_handler!(spectrometer, recorder);
 }
+#[cfg(feature = "stub")]
+impl InterruptHandler {
+    pub fn stub() -> Self {
+        tracing::warn!("Using stub InterruptHandler");
 
+        Self {
+            uio: Uio::stub(),
+            registers: Registers::stub(),
+            notify_spectrometer: Arc::new(Notify::new()),
+            notify_recorder: Arc::new(Notify::new()),
+        }
+    }
+
+    pub async fn run(self) -> Result<()> {
+        tracing::warn!("Stub InterruptHandler running (no hardware)");
+        futures::future::pending::<()>().await;
+        Ok(())
+    }
+}
 impl InterruptWaiter {
     /// Waits for an interrupt.
     ///
@@ -837,7 +954,7 @@ impl InterruptWaiter {
         self.notify.notified()
     }
 }
-
+#[cfg(not(feature = "stub"))]
 impl Dma {
     async fn new(name: &str) -> Result<Dma> {
         let buffer = RxBuffer::new(name)
@@ -848,7 +965,7 @@ impl Dma {
             anyhow::bail!("num_buffers is not a power of 2");
         }
         Ok(Dma {
-            buffer,
+            buffer: Some(buffer),
             last_written: None,
             num_buffers_mask: num_buffers - 1,
         })
@@ -866,8 +983,80 @@ impl Dma {
             .map(|n| n & self.num_buffers_mask)
             .take_while(move |&n| n != end)
             .map(|n| {
-                self.buffer.cache_invalidate(n).unwrap();
-                self.buffer.buffer_as_slice(n)
+                let buffer = self.buffer.as_ref().unwrap();
+                buffer.cache_invalidate(n).unwrap();
+                buffer.buffer_as_slice(n)
             })
+    }
+}
+#[cfg(feature = "stub")]
+impl IpCore {
+    fn set_ddc_fir1(&self, _: &[i32], _: usize, _: f64) -> Result<()> {
+        Ok(())
+    }
+    fn set_ddc_fir2(&self, _: &[i32], _: usize, _: f64) -> Result<()> {
+        Ok(())
+    }
+    fn set_ddc_fir3(&self, _: &[i32], _: usize, _: f64) -> Result<()> {
+        Ok(())
+    }
+    pub async fn take() -> anyhow::Result<(IpCore, InterruptHandler)> {
+        tracing::warn!("Using stub FPGA (host mode)");
+
+        Ok((Self::stub(), InterruptHandler::stub()))
+    }
+
+    pub fn stub() -> Self {
+        use std::mem::MaybeUninit;
+
+        Self {
+            registers: Registers::stub(),
+            phys_addr: 0,
+            spectrometer: Dma::stub(),
+
+            spectrometer_integrations: 1,
+            spectrometer_mode: maia_json::SpectrometerMode::Average,
+            spectrometer_input: maia_json::SpectrometerInput::AD9361,
+
+            ddc_config: default_ddc_config(),
+            ddc_enabled: false,
+        }
+    }
+
+    pub fn spectrometer_last_buffer(&self) -> usize {
+        0
+    }
+
+    pub fn version(&self) -> String {
+        "stub".to_string()
+    }
+
+    async fn log_open(&self) -> Result<()> {
+        tracing::warn!("Stub FPGA initialized");
+        Ok(())
+    }
+}
+#[cfg(feature = "stub")]
+impl Dma {
+    pub fn stub() -> Self {
+        Self {
+            buffer: None,
+            last_written: None,
+            num_buffers_mask: 0,
+        }
+    }
+
+    fn get_new_buffers(&mut self, _last_written: usize) -> impl Iterator<Item = &[u8]> {
+        std::iter::empty()
+    }
+}
+#[cfg(feature = "stub")]
+impl Registers {
+    pub fn stub() -> Self {
+        use std::mem::MaybeUninit;
+
+        tracing::warn!("Using stub Registers");
+
+        unsafe { MaybeUninit::zeroed().assume_init() }
     }
 }

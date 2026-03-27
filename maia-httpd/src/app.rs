@@ -52,6 +52,38 @@ impl App {
         // Build application objects
 
         let (waterfall_sender, _) = broadcast::channel(16);
+        use bytes::Bytes;
+        use tokio::time::{Duration, sleep};
+
+        let fake_sender = waterfall_sender.clone();
+
+        tokio::spawn(async move {
+            let mut counter: u32 = 0;
+
+            loop {
+                let mut data = Vec::with_capacity(4096 * 4);
+
+                for i in 0..4096 {
+                    // base sine-wave pattern
+                    let mut val = ((i as f32 / 20.0).sin() * 40.0 + 50.0) as f32;
+
+                    // deterministic "peak" movement
+                    let peak_pos = ((i + counter as usize) % 4096) as f32;
+                    let distance = (i as f32 - peak_pos).abs();
+                    val += (100.0 * (-distance / 50.0).exp()) as f32;
+
+                    // small deterministic variation
+                    val += ((i * 13 + counter as usize * 7) % 11) as f32 - 5.0;
+
+                    data.extend_from_slice(&val.to_le_bytes());
+                }
+
+                let _ = fake_sender.send(Bytes::from(data));
+
+                counter = counter.wrapping_add(1);
+                sleep(Duration::from_millis(50)).await;
+            }
+        });
         let spectrometer = Spectrometer::new(
             state.clone(),
             interrupt_handler.waiter_spectrometer(),
