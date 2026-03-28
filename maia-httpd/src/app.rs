@@ -58,30 +58,72 @@ impl App {
         let fake_sender = waterfall_sender.clone();
 
         tokio::spawn(async move {
-            let mut counter: u32 = 0;
+            let mut frame: u32 = 0;
 
             loop {
                 let mut data = Vec::with_capacity(4096 * 4);
 
                 for i in 0..4096 {
-                    // base sine-wave pattern
-                    let mut val = ((i as f32 / 20.0).sin() * 40.0 + 50.0) as f32;
+                    let x = i as f32;
+                    let t = frame as f32;
 
-                    // deterministic "peak" movement
-                    let peak_pos = ((i + counter as usize) % 4096) as f32;
-                    let distance = (i as f32 - peak_pos).abs();
-                    val += (100.0 * (-distance / 50.0).exp()) as f32;
+                    // -------------------------------
+                    // Base noise floor (slow drift)
+                    // -------------------------------
+                    let mut val = 20.0
+                        + (x / 200.0 + t / 100.0).sin() * 3.0
+                        + (x / 80.0 + t / 60.0).cos() * 2.0;
 
-                    // small deterministic variation
-                    val += ((i * 13 + counter as usize * 7) % 11) as f32 - 5.0;
+                    // -------------------------------
+                    // Strong moving carrier #1
+                    // -------------------------------
+                    let carrier1_pos = (t * 3.0) % 4096.0;
+                    let d1 = (x - carrier1_pos).abs();
+                    val += 80.0 * (-d1 / 18.0).exp();
+
+                    // -------------------------------
+                    // Strong moving carrier #2 (opposite direction)
+                    // -------------------------------
+                    let carrier2_pos = 4096.0 - ((t * 2.0) % 4096.0);
+                    let d2 = (x - carrier2_pos).abs();
+                    val += 65.0 * (-d2 / 25.0).exp();
+
+                    // -------------------------------
+                    // Wideband sweep signal
+                    // -------------------------------
+                    let sweep_center = 2048.0 + (t / 8.0).sin() * 1500.0;
+
+                    let d3 = (x - sweep_center).abs();
+                    val += 30.0 * (-d3 / 150.0).exp();
+
+                    // -------------------------------
+                    // Burst signal (appears periodically)
+                    // -------------------------------
+                    let burst = ((frame / 30) % 4) == 0;
+                    if burst {
+                        let burst_center = 1000.0;
+                        let d4 = (x - burst_center).abs();
+                        val += 90.0 * (-d4 / 12.0).exp();
+                    }
+
+                    // -------------------------------
+                    // Multi-tone comb (radio-like)
+                    // -------------------------------
+                    val += ((x / 40.0 + t / 10.0).sin() * 6.0).max(0.0);
+                    val += ((x / 18.0 + t / 6.0).cos() * 4.0).max(0.0);
+
+                    // -------------------------------
+                    // Clamp
+                    // -------------------------------
+                    let val = val.max(0.0);
 
                     data.extend_from_slice(&val.to_le_bytes());
                 }
 
                 let _ = fake_sender.send(Bytes::from(data));
 
-                counter = counter.wrapping_add(1);
-                sleep(Duration::from_millis(50)).await;
+                frame = frame.wrapping_add(1);
+                sleep(Duration::from_millis(40)).await;
             }
         });
         let spectrometer = Spectrometer::new(
